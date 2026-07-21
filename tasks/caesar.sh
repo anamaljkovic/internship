@@ -27,6 +27,11 @@ else
     shift=$((shift%26))
 fi
 
+if [[ "$input" == "$output" ]];then
+    echo "input file can't be the same as the output one"
+    exit 1
+fi
+
 if [[ ! -f "$input" ]]; then
     echo "input file does not exist -> $input"
     exit 1

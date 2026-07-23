@@ -5,6 +5,7 @@ numbers=()
 debug=false
 res=0
 res_arr=()
+single_operation=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -41,26 +42,38 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if (( ${#numbers[@]} != ${#operations[@]} + 1 ));then
+if (( ${#operations[@]} > 1 && ${#numbers[@]} != ${#operations[@]} + 1 ));then
     echo "Wrong number of operands"
     exit 1
 fi
 
-res=${numbers[0]}
-res_arr+=$res
+if (( ${#operations[@]} == 1)); then
+    single_operation=${operations[0]}
+fi
 
-for((i=0;i<${#operations[@]};i++)); do
-    operation=${operations[i]}
+res=${numbers[0]}
+res_arr+=("$res")
+
+
+for((i=1;i<=${#numbers[@]};i++)); do
+    if [[ ! -z "$single_operation" ]];then
+        operation="$single_operation"
+    else
+        operation=${operations[i-1]}
+    fi
 
     case $operation in
-        -) res=$((res-numbers[i+1])) ;;
-        +) res=$((res+numbers[i+1])) ;;
-        \*) res=$((res*numbers[i+1])) ;;
-        %) res=$((res%numbers[i+1])) ;;
+        -) res=$((res-numbers[i])) ;;
+        +) res=$((res+numbers[i])) ;;
+        \*) res=$((res*numbers[i])) ;;
+        %) res=$((res%numbers[i])) ;;
     esac
     res_arr+=("$operation")
-    res_arr+=("${numbers[i+1]}")
+    res_arr+=("${numbers[i]}")
+
 done
+
+
 
 if $debug; then
     echo "User: $(whoami)"

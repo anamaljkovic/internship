@@ -7,11 +7,13 @@ lowercase=false
 uppercase=false
 input=""
 output=""
+switch=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -s)
             shift
+            switch=true
             while [[ $# -gt 0 && "$1" != -* && "$2" != -* ]]; do
                 strings+=("$1")
                 strings+=("$2")
@@ -45,10 +47,6 @@ if [[ ! -f "$input" ]];then
     exit 1
 fi
 
-if [[ ! -s "$input" ]];then
-    echo "The input file is empty"
-    exit 1
-fi
 
 if [[ "$input" == "$output" ]];then
     echo "Input and output files must be different"
@@ -56,7 +54,7 @@ if [[ "$input" == "$output" ]];then
 fi
 
 
-if (( "${#strings[@]}" != 2 ));then
+if [[ "$switch" == true && "${#strings[@]}" -ne 2 ]]; then
     echo "After -s flag you need to provide 2 strings"
     exit 1
 fi

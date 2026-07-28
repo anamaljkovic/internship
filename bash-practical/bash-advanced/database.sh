@@ -14,12 +14,32 @@ create_db(){
 
     mkdir "$db_name" || error "Failed to create database '$db_name'"
     success "Database '$db_name' created"
-    true
 }
 
 create_table(){
-    true
+    local db="$1"; shift
+    local table_name="$1"; shift
+    local cols=("$@")
+    local colNum="${#cols[@]}"
+    [ -z "$db" ] && error "Databse name cannot be empty"
+    [ -d "$db" ] || error "Database '$db' doesn't exist"
+    [ "$colNum" -lt 1 ] && error "You must have at least one column"
+    [ "$colNum" -gt 4 ] && error "Maximum number of columns is 4"
+
+    [ -z "$table_name" ] && error "Table name cannot be empty"
+    [ -f "${table_name}.txt" ] && error "Table '$table_name' already exists"
+
+    touch "${table_name}.txt" || error "Failed to create table '$table_name'"
+
+    echo "### $table_name ###">>"${table_name}.txt"
+    echo -n "**">>"${table_name}.txt"
+    for name in "${cols[@]}"; do
+        printf " %-7.7s**" "$name" >> "${table_name}.txt"
+    done    
+    success "table '$table_name' created"
 }
+
+#** 6 ** 6 ** 7 ** 7 ** 29-
 
 select_data(){
     true
@@ -47,3 +67,4 @@ main(){
 
 
 main "$@"
+

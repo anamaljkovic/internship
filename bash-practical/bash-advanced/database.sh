@@ -227,6 +227,24 @@ insert_data(){
     blank_line=$(awk -v s="$start_line" 'NR>s && $0=="" {print NR; exit}' "$file")
     [ -z "$blank_line" ] && error "Error within a file - missing newline"
 
+    local id_col
+    id_col=$(key_col_index "$db" "$table" "id")
+
+    if [ "$id_col" -ne 0 ];then
+        local id_value="${vals[$((id_col-2))]}" 
+
+        local data_start=$((start_line + 2))
+        local data_end=$((blank_line - 1))
+
+        local dupl
+        dupl=$(awk -v s="$data_start" -v e="$data_end" -v c="$id_col" -v v="$id_value" '
+            NR>=s && NR<=e && $c==v { print NR; exit }
+        ' "$file")
+
+        [ -n "$dupl" ] && error "id '$id_value' already exists in '$table'"
+    fi
+
+
     local insert_at=$((blank_line - 1))
 
     local sed_script
@@ -275,15 +293,16 @@ delete_data(){
     blank_line=$(awk -v s="$start_line" 'NR>s && $0=="" {print NR; exit}' "$file")
     [ -z "$blank_line" ] && error "Error within a file - missing newline"
 
+    
     local data_start=$((start_line + 2))
     local data_end=$((blank_line - 1))
 
-     local -a lines_to_delete
-        mapfile -t lines_to_delete < <(
-            awk -v s="$data_start" -v e="$data_end" -v c="$col_index" -v v="$value" '
-                NR>=s && NR<=e && $c==v { print NR }
+    local -a lines_to_delete
+    mapfile -t lines_to_delete < <(
+        awk -v s="$data_start" -v e="$data_end" -v c="$col_index" -v v="$value" '
+            NR>=s && NR<=e && $c==v { print NR }
             ' "$file" | sort -rn
-        )
+    )
 
     local deleted=${#lines_to_delete[@]}
 

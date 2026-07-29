@@ -137,6 +137,10 @@ create_table(){
     cols_check "${#cols[@]}"
     [ -z "$table_name" ] && error "Table name cannot be empty"
 
+    for c in "${cols[@]}"; do
+        [ "${#c}" -gt 7 ] && error "col name '$c' exceeds max len of 7 chars"
+    done
+
     local file="${db}.txt"
     if grep -q "^### ${table_name} ###\$" "$file"; then
         error "Table ${table_name} already exists"
@@ -201,9 +205,14 @@ insert_data(){
     expected=$(table_col_count "$db" "$table")
     [ "${#vals[@]}" -ne "$expected" ] && error "Expected $expected vals, got ${#vals[@]}"
 
+    for v in "${vals[@]}"; do
+        [ "${#v}" -gt 7 ] && error "val '$v' exceeds max len of 7 chars"
+    done
+
     local file="${db}.txt"
     local new_row
     new_row=$(format_row "${vals[@]}")
+    [ $? -ne 0 ] && error "Failed to format row"
 
     local start_line
     start_line=$(grep -n "^### ${table} ###\$" "$file" | cut -d: -f1)

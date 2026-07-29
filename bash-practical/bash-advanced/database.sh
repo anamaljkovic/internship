@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+if sed --version >/dev/null 2>&1; then
+    SED_INPLACE=(-i)
+else
+    SED_INPLACE=(-i '')
+fi
+
 green='\033[0;32m'
 red='\033[0;31m'
 reset='\033[0m'
@@ -180,10 +186,10 @@ select_data(){
 
     echo "Table: $table"
 
-    head -n "$((start_line + 1))" "$file" | tail -n 1
+    sed -n "$((start_line + 1))p" "$file"
 
     if [ "$data_end" -ge "$data_start" ]; then
-        tail -n +"$data_start" "$file" | head -n "$((data_end - data_start + 1))"
+        sed -n "${data_start},${data_end}p" "$file"
     else
         echo "(no rows)"
     fi
@@ -223,12 +229,10 @@ insert_data(){
 
     local insert_at=$((blank_line - 1))
 
-    local tmp
-    tmp=$(mktemp)
-    head -n "$insert_at" "$file" > "$tmp"
-    echo "$new_row" >> "$tmp"
-    tail -n +"$((insert_at + 1))" "$file" >> "$tmp"
-    mv "$tmp" "$file"
+    local sed_script
+    sed_script=$(printf '%da\\\n%s' "$insert_at" "$new_row")
+
+    sed "${SED_INPLACE[@]}" "$sed_script" "$file"
 
     success "row added to '$table' table"
 }
@@ -274,29 +278,23 @@ delete_data(){
     local data_start=$((start_line + 2))
     local data_end=$((blank_line - 1))
 
-    local tmp
-    tmp=$(mktemp)
+     local -a lines_to_delete
+        mapfile -t lines_to_delete < <(
+            awk -v s="$data_start" -v e="$data_end" -v c="$col_index" -v v="$value" '
+                NR>=s && NR<=e && $c==v { print NR }
+            ' "$file" | sort -rn
+        )
 
-    head -n "$((data_start - 1))" "$file" > "$tmp"
+    local deleted=${#lines_to_delete[@]}
 
-    local deleted=0
-    if [ "$data_end" -ge "$data_start" ]; then
-        while IFS= read -r line; do
-            local cell
-            cell=$(echo "$line" | awk -v c="$col_index" '{print $c}')
-            if [ "$cell" == "$value" ]; then
-                deleted=$((deleted + 1))
-                continue
-            fi
-            echo "$line" >> "$tmp"
-        done < <(tail -n +"$data_start" "$file" | head -n "$((data_end - data_start + 1))")
-    fi
+    [ "$deleted" -eq 0 ] && error "No rows matched $key=$value" 
 
-    tail -n +"$blank_line" "$file" >> "$tmp"
+    local ln
+    for ln in "${lines_to_delete[@]}"; do
+        sed "${SED_INPLACE[@]}" "${ln}d" "$file"
+    done
 
-    mv "$tmp" "$file"
-
-    [ "$deleted" -eq 0 ] && echo "No rows matched $key=$value" || success "Deleted $deleted row(s) from '$table'"
+    success "Deleted $deleted rows from '$table'"
 }
 
 main(){

@@ -33,9 +33,9 @@ def make_order(existing_orders, items, address, user_id=None):
     }
 
 
-def make_user(user_id, name, address, password_hash):
+def make_user(existing_users, name, address, password_hash):
     return {
-        "id": user_id,
+        "id": next_id(existing_users),
         "name": name,
         "address": address,
         "password_hash": password_hash,

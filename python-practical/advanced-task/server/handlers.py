@@ -37,6 +37,12 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
                 return order
         return None
 
+    def find_user(self, users, user_id):
+        for u in users:
+            if(u["id"]==user_id):
+                return u
+        return None
+
     def is_admin_request(self):
         """
         check whether the current request carries a valid admin token
@@ -80,6 +86,8 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
             self.handle_create_order()
         elif self.path=="/menu":
             self.handle_add_pizza()
+        elif self.path=="/users":
+            self.handle_register_user()
         else:
             self._send_json(404, {"error": f"Unknown path: {self.path}"})
 
@@ -97,6 +105,19 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
         if not items:
             self._send_json(400, {"error":"Missing mandatory field: items"})
             return
+
+
+        if user_id is not None:
+            users = storage.load_users()
+            user = self.find_user(users, user_id)
+
+            if user is None:
+                self._send_json(400, {"error": f"no user found with ID --> {user_id}"})
+                return
+
+            if not address:
+                address=user["address"]
+        
         if not address:
             self._send_json(400, {"error":"Missing mandatory field: address"})
             return
@@ -136,6 +157,38 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
         storage.save_menu(menu)
 
         self._send_json(201, pizza)
+
+    def handle_register_user(self):
+
+        try:
+            body = self._read_json_body()
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "Invalid JSON in request body"})
+            return
+
+        name = body.get("name")
+        address = body.get("address")
+        password = body.get("password")
+
+        if not name:
+            self._send_json(400, {"error": "Missing required field: name"})
+            return
+        if not address:
+            self._send_json(400, {"error": "Missing required field: address"})
+            return
+        if not password:
+            self._send_json(400, {"error": "Missing required field: password"})
+            return
+
+        password_hash = auth.hash_password(password)
+
+        users = storage.load_users()
+        user = model.make_user(users, name=name, address=address, password_hash=password_hash)
+        users.append(user)
+        storage.save_users(users)
+
+        response_user = {k: v for k, v in user.items() if k != "password_hash"}
+        self._send_json(201, response_user)
 
 
     def do_DELETE(self):

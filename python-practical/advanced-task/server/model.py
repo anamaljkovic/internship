@@ -8,7 +8,10 @@ ORDER_STATUS=["received", "preparing", "ready_to_be_delievered", "delivered", "c
 
 def next_id(existing_items):
     """
-    find the next available ID for a list of items, return 1 if the list is empty
+    Compute the next available integer ID from existing ones (json file)
+
+    IDs are calculated this way (max existing ID + 1), they stay correct across
+    server restarts 
     """
     if not existing_items:
         return 1

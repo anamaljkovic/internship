@@ -57,6 +57,14 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
         return auth.is_valid_admin_token(token)
 
     def require_admin(self):
+        """
+        admin-only endpoint
+
+        Sends a 401 response and returns False if the request isn't a
+        valid admin request. Callers must check the return value and
+        `return` immediately if False — this only sends the response,
+        it doesn't stop execution on its own.
+        """
         if not self.is_admin_request():
             self._send_json(401, {"error":"valid admin token required"})
             return False
@@ -91,7 +99,19 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
         else:
             self._send_json(404, {"error": f"Unknown path: {self.path}"})
 
+
+
+
     def handle_create_order(self):
+        """
+        Handle POST /order 
+
+        Validation order matters here:
+        1. items must be present and reference pizzas that actually exist
+        on the menu
+        2. If user_id is given, it's validated against users.json
+        3. address is required unless a valid user_id supplies a stored one.
+        """
         try:
             body = self._read_json_body()
         except json.JSONDecodeError:
@@ -103,23 +123,31 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
         user_id = body.get("user_id")
 
         if not items:
-            self._send_json(400, {"error":"Missing mandatory field: items"})
+            self._send_json(400, {"error": "Missing mandatory field: items"})
             return
 
+        menu = storage.load_menu()
+        menu_ids = {pizza["id"] for pizza in menu}
+        invalid_ids = [item_id for item_id in items if item_id not in menu_ids]
+
+        if invalid_ids:
+            self._send_json(
+                400,
+                {"error": f"No pizza(s) found with ID(s): {invalid_ids}"},
+            )
+            return
 
         if user_id is not None:
             users = storage.load_users()
             user = self.find_user(users, user_id)
-
             if user is None:
-                self._send_json(400, {"error": f"no user found with ID --> {user_id}"})
+                self._send_json(400, {"error": f"No user found with ID {user_id}"})
                 return
-
             if not address:
-                address=user["address"]
-        
+                address = user["address"]
+
         if not address:
-            self._send_json(400, {"error":"Missing mandatory field: address"})
+            self._send_json(400, {"error": "Missing mandatory field: address"})
             return
 
         orders = storage.load_orders()
@@ -151,7 +179,20 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "Missing required field: price"})
             return
 
+        if not isinstance(price, (int, float)) or isinstance(price, bool):
+            self._send_json(400, {"error": "price must be a number"})
+            return
+        if price <= 0:
+            self._send_json(400, {"error": "price must be greater than 0"})
+            return
+
         menu = storage.load_menu()
+
+        existing_names = {pizza["name"].strip().lower() for pizza in menu}
+        if name.strip().lower() in existing_names:
+            self._send_json(400, {"error": f"A pizza named '{name}' already exists"})
+            return
+        
         pizza = model.make_pizza(menu, name=name, price=price, toppings=toppings)
         menu.append(pizza)
         storage.save_menu(menu)
@@ -200,6 +241,16 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": f"Unknown path: {self.path}"})
 
     def handle_cancel_order(self):
+
+        """
+        DELETE /order/{order_id} 
+
+        a non-admin request is blocked (409) if the order's
+        status is exactly "ready_to_be_delivered". A valid admin token
+        bypasses this check entirely and can cancel any order regardless
+        of status.
+        """
+        
         order_id_str = self.path.removeprefix("/order/")
         
         try:

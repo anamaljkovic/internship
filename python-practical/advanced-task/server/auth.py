@@ -13,6 +13,15 @@ ADMIN_TOKEN = os.environ.get("PIZZA_ADMIN_TOKEN")
 
 
 def is_valid_admin_token(token):
+    """
+    Compare a given token against the configured admin token.
+
+    Uses a timing-safe comparison (secrets.compare_digest) rather
+    than `==`, since a plain equality check can cause a leak 
+
+    Returns False if no admin token is configured at all 
+    (PIZZA_ADMIN_TOKEN env var was never set)
+    """
     if not ADMIN_TOKEN:
         return False
     return secrets.compare_digest(token or "", ADMIN_TOKEN)

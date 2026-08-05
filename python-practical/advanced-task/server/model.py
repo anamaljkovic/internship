@@ -4,27 +4,28 @@ Factory functions for pizzas, orders, and users.
 Every function builds a plain dict with an auto-generated ID
 """
 
-import itertools
-
-
-_user_id_counter = itertools.count(start=1)
-_pizza_id_counter = itertools.count(start=1)
-_order_id_counter = itertools.count(start=1)
-
 ORDER_STATUS=["received", "preparing", "ready_to_be_delievered", "delivered", "cancelled"]
 
-def makePizza(name, price, toppings):
+def nextId(existing_items):
+    """
+    find the next available ID for a list of items, return 1 if the list is empty
+    """
+    if not existing_items:
+        return 1
+    return max(item["id"] for item in existing_items) + 1
+
+def makePizza(existing_menu, name, price, toppings):
     return {
-        "id": next(_pizza_id_counter),
+        "id": nextId(existing_menu),
         "name": name,
         "price": price,
         "toppings": toppings,
     }
 
 
-def makeOrder(items, address, user_id=None):
+def makeOrder(existing_orders, items, address, user_id=None):
     return {
-        "id": next(_order_id_counter),
+        "id": nextId(existing_orders),
         "items": items,
         "address": address,
         "user_id": user_id,
@@ -32,7 +33,7 @@ def makeOrder(items, address, user_id=None):
     }
 
 
-def makeUser(user_id, name, address, password_hash):
+def makeUser(existing_users, user_id, name, address, password_hash):
     return {
         "id": user_id,
         "name": name,

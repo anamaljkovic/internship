@@ -1,6 +1,6 @@
 from http.server import BaseHTTPRequestHandler
 import json
-from server import storage,model
+from server import storage,model,auth
 
 class PizzaRequestHandler(BaseHTTPRequestHandler):
     def _send_json(self, status_code, data):
@@ -12,7 +12,7 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _readJsonBody(self):
+    def _read_json_body(self):
         content_length = int(self.headers.get("Content-Length", 0))
         raw_body = self.rfile.read(content_length)
         return json.loads(raw_body)
@@ -20,24 +20,43 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path=="/menu":
-            self.handle_getMenu()
+            self.handle_get_menu()
         elif self.path.startswith("/order/"):
-            self.handle_getOrderStatus()
+            self.handle_get_order_status()
         else:
             self._send_json(404, {"error": f"Unknown path: {self.path}"})
 
-    def handle_getMenu(self):
+    def handle_get_menu(self):
         """return the menu"""
-        menu = storage.loadMenu()
+        menu = storage.load_menu()
         self._send_json(200,menu)
 
-    def findOrder(self, orders, order_id):
+    def find_order(self, orders, order_id):
         for order in orders:
             if(order["id"]==order_id):
                 return order
         return None
 
-    def handle_getOrderStatus(self):
+    def is_admin_request(self):
+        """
+        check whether the current request carries a valid admin token
+        expectes token in the form"Bearer <token>" and validates it
+        """
+        auth_header = self.headers.get("Authorization", "")
+        print("received header --> ", repr(auth_header))
+        print("admin token --> :", repr(auth.ADMIN_TOKEN))
+        if not auth_header.startswith("Bearer "):
+            return False
+        token = auth_header.removeprefix("Bearer ")
+        return auth.is_valid_admin_token(token)
+
+    def require_admin(self):
+        if not self.is_admin_request():
+            self._send_json(401, {"error":"valid admin token required"})
+            return False
+        return True
+
+    def handle_get_order_status(self):
         order_id_str = self.path.removeprefix("/order/")
 
         try:
@@ -46,8 +65,8 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
             self._send_json(400,{"error":f"invalid order ID -> {order_id_str}"})
             return
 
-        orders = storage.loadOrders()
-        order = self.findOrder(orders, order_id)
+        orders = storage.load_orders()
+        order = self.find_order(orders, order_id)
 
         if order is None:
             self._send_json(404, {"error":f"no order with ID -> {order_id}"})
@@ -58,13 +77,15 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path=="/order":
-            self.handle_createOrder()
+            self.handle_create_order()
+        elif self.path=="/menu":
+            self.handle_add_pizza()
         else:
             self._send_json(404, {"error": f"Unknown path: {self.path}"})
 
-    def handle_createOrder(self):
+    def handle_create_order(self):
         try:
-            body = self._readJsonBody()
+            body = self._read_json_body()
         except json.JSONDecodeError:
             self._send_json(400, {"error": "Invalid JSON in request body"})
             return
@@ -80,21 +101,52 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error":"Missing mandatory field: address"})
             return
 
-        orders = storage.loadOrders()
-        order = model.makeOrder(orders, items=items, address=address, user_id=user_id)
+        orders = storage.load_orders()
+        order = model.make_order(orders, items=items, address=address, user_id=user_id)
 
         orders.append(order)
-        storage.saveOrders(orders)
+        storage.save_orders(orders)
 
         self._send_json(201, order)
 
+    def handle_add_pizza(self):
+        if not self.require_admin():
+            return
+
+        try:
+            body = self._read_json_body()
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "Invalid JSON in request body"})
+            return
+
+        name = body.get("name")
+        price = body.get("price")
+        toppings = body.get("toppings", [])
+
+        if not name:
+            self._send_json(400, {"error": "Missing required field: name"})
+            return
+        if price is None:
+            self._send_json(400, {"error": "Missing required field: price"})
+            return
+
+        menu = storage.load_menu()
+        pizza = model.make_pizza(menu, name=name, price=price, toppings=toppings)
+        menu.append(pizza)
+        storage.save_menu(menu)
+
+        self._send_json(201, pizza)
+
+
     def do_DELETE(self):
         if self.path.startswith("/order/"):
-            self.handle_cancelOrder()
+            self.handle_cancel_order()
+        elif self.path.startswith("/menu/"):
+            self.handle_remove_pizza()
         else:
             self._send_json(404, {"error": f"Unknown path: {self.path}"})
 
-    def handle_cancelOrder(self):
+    def handle_cancel_order(self):
         order_id_str = self.path.removeprefix("/order/")
         
         try:
@@ -103,14 +155,17 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
             self._send_json(400,{"error":f"invalid order ID -> {order_id_str}"})
             return
         
-        orders = storage.loadOrders()
-        order = self.findOrder(orders, order_id)
+        orders = storage.load_orders()
+        order = self.find_order(orders, order_id)
         
         if order is None:
             self._send_json(404, {"error":f"no order with ID -> {order_id}"})
             return
 
-        if order["status"] == "ready_to_be_delivered":
+        is_admin = self.is_admin_request()
+
+
+        if not is_admin and order["status"] == "ready_to_be_delivered":
             self._send_json(
                 409,
                 {"error": "Cannot cancel an order that is ready to be delivered"},
@@ -118,6 +173,27 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
             return
 
         order["status"] = "cancelled"
-        storage.saveOrders(orders)
+        storage.save_orders(orders)
 
         self._send_json(200, order)
+
+    def handle_remove_pizza(self):
+        if not self.require_admin():
+            return
+
+        pizza_id_str = self.path.removeprefix("/menu/")
+        try:
+            pizza_id = int(pizza_id_str)
+        except ValueError:
+            self._send_json(400, {"error": f"invalid pizza ID -> {pizza_id_str}"})
+            return
+
+        menu = storage.load_menu()
+        edited_menu = model.remove_pizza(menu, pizza_id)
+
+        if len(edited_menu) == len(menu):
+            self._send_json(404, {"error": f"no pizza found with ID -> {pizza_id}"})
+            return
+
+        storage.save_menu(edited_menu)
+        self._send_json(200, {"message": f"pizza {pizza_id} removed"})

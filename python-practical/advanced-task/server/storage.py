@@ -28,25 +28,25 @@ def save_json(path, data):
         json.dump(data, f, indent=2)
 
 
-def loadMenu():
+def load_menu():
     return load_json(MENU_PATH, [])
 
 
-def saveMenu(menu):
+def save_menu(menu):
     save_json(MENU_PATH, menu)
 
 
-def loadOrders():
+def load_orders():
     return load_json(ORDERS_PATH, [])
 
 
-def saveOrders(orders):
+def save_orders(orders):
     save_json(ORDERS_PATH, orders)
 
 
-def loadUsers():
+def load_users():
     return load_json(USERS_PATH, [])
 
 
-def saveUsers(users):
+def save_users(users):
     save_json(USERS_PATH, users)

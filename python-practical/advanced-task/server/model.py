@@ -4,7 +4,7 @@ Factory functions for pizzas, orders, and users.
 Every function builds a plain dict with an auto-generated ID
 """
 
-ORDER_STATUS=["received", "preparing", "ready_to_be_delievered", "delivered", "cancelled"]
+ORDER_STATUS=["received", "preparing", "ready_to_be_delivered", "delivered", "cancelled"]
 
 def next_id(existing_items):
     """

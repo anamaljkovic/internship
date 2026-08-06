@@ -49,8 +49,6 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
         expectes token in the form"Bearer <token>" and validates it
         """
         auth_header = self.headers.get("Authorization", "")
-        print("received header --> ", repr(auth_header))
-        print("admin token --> :", repr(auth.ADMIN_TOKEN))
         if not auth_header.startswith("Bearer "):
             return False
         token = auth_header.removeprefix("Bearer ")
@@ -301,3 +299,51 @@ class PizzaRequestHandler(BaseHTTPRequestHandler):
 
         storage.save_menu(edited_menu)
         self._send_json(200, {"message": f"pizza {pizza_id} removed"})
+
+
+    def do_PATCH(self):
+        if self.path.startswith("/order/") and self.path.endswith("/status"):
+            self.handle_update_order_status()
+        else:
+            self._send_json(404, {"error": f"Unknown path: {self.path}"})
+
+
+    def handle_update_order_status(self):
+        """Handle PATCH /order/{order_id}/status — admin only. Sets an order's status."""
+        if not self.require_admin():
+            return
+
+        path_parts = self.path.removeprefix("/order/").removesuffix("/status")
+
+        try:
+            order_id = int(path_parts)
+        except ValueError:
+            self._send_json(400, {"error": f"invalid order ID -> {path_parts}"})
+            return
+
+        try:
+            body = self._read_json_body()
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "Invalid JSON in request body"})
+            return
+
+        new_status = body.get("status")
+
+        if new_status not in model.ORDER_STATUS:
+            self._send_json(
+                400,
+                {"error": f"Invalid status '{new_status}'. Must be one of: {model.ORDER_STATUS}"},
+            )
+            return
+
+        orders = storage.load_orders()
+        order = self.find_order(orders, order_id)
+
+        if order is None:
+            self._send_json(404, {"error": f"no order with ID -> {order_id}"})
+            return
+
+        order["status"] = new_status
+        storage.save_orders(orders)
+
+        self._send_json(200, order)

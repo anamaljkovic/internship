@@ -9,3 +9,15 @@ variable "subnet_cidr" {
 variable "region" {
   type = string
 }
+
+variable "allowed_ssh_ranges" {
+  type = list(string)
+}
+
+variable "allowed_http_ranges" {
+  type = list(string)
+}
+
+variable "app_port" {
+  type = number
+}

@@ -44,3 +44,9 @@ variable "app_port" {
   type        = number
   default     = 80
 }
+
+variable "machine_type" {
+  description = "Machine for temp VM"
+  type        = string
+  default     = "e2-small"
+}

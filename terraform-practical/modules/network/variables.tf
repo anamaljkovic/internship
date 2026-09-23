@@ -20,4 +20,4 @@ variable "allowed_http_ranges" {
 
 variable "app_port" {
   type = number
-}
+}   

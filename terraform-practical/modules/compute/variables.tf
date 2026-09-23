@@ -2,6 +2,10 @@ variable "zone" {
   type = string
 }
 
+variable "app_port" {
+  type = number
+}
+
 variable "network_self_link" {
   type = string
 }

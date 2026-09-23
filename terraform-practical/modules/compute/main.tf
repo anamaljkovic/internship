@@ -54,3 +54,43 @@ resource "google_compute_image" "baked_image" {
   depends_on = [null_resource.wait_and_stop]
 }
 
+data "google_compute_image" "web_image" {
+  name       = var.image_name
+  project    = var.project_id
+  depends_on = [google_compute_image.baked_image]
+}
+
+resource "google_compute_instance_template" "web_template" {
+  name_prefix  = "web-tmpl-"
+  machine_type = var.machine_type
+  tags         = ["web"]
+
+  disk {
+    source_image = data.google_compute_image.web_image.self_link
+    auto_delete  = true
+    boot         = true
+  }
+
+  network_interface {
+    network    = var.network_self_link
+    subnetwork = var.subnet_self_link
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "google_compute_health_check" "web_health_check" {
+  name                = "web-health-check"
+  check_interval_sec  = 5
+  timeout_sec         = 5
+  healthy_threshold   = 2
+  unhealthy_threshold = 3
+
+  http_health_check {
+    port         = var.app_port
+    request_path = "/"
+  }
+}
+

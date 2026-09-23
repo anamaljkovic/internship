@@ -14,7 +14,7 @@ resource "google_compute_instance" "temp_vm" {
   network_interface {
     network    = var.network_self_link
     subnetwork = var.subnet_self_link
-    access_config {} 
+    access_config {}
   }
 
   metadata_startup_script = var.startup_script
@@ -33,7 +33,7 @@ resource "null_resource" "wait_and_stop" {
       echo "waiting for provisioning to complete on temp vm"
       for i in $(seq 1 30); do
         if gcloud compute instances get-serial-port-output ${google_compute_instance.temp_vm.name} \
-             --zone=${var.zone} --project=${var.project_id} 2>/dev/null | grep -q provisioning_complete; then
+            --zone=${var.zone} --project=${var.project_id} 2>/dev/null | grep -q provisioning_complete; then
           break
         fi
         sleep 10
@@ -54,11 +54,6 @@ resource "google_compute_image" "baked_image" {
   depends_on = [null_resource.wait_and_stop]
 }
 
-data "google_compute_image" "web_image" {
-  name       = var.image_name
-  project    = var.project_id
-  depends_on = [google_compute_image.baked_image]
-}
 
 resource "google_compute_instance_template" "web_template" {
   name_prefix  = "web-tmpl-"
@@ -66,7 +61,7 @@ resource "google_compute_instance_template" "web_template" {
   tags         = ["web"]
 
   disk {
-    source_image = data.google_compute_image.web_image.self_link
+    source_image = google_compute_image.baked_image.self_link
     auto_delete  = true
     boot         = true
   }
@@ -97,7 +92,7 @@ resource "google_compute_region_health_check" "web_health_check" {
   }
 }
 
-resource "google_compute_region_instance_group_manager" "web_mig" {
+resource "google_compute_region_instance_group_manager" "web_igm" {
   name               = "web-mig"
   region             = var.region
   base_instance_name = "web"
@@ -118,12 +113,6 @@ resource "google_compute_region_instance_group_manager" "web_mig" {
   }
 }
 
-resource "google_compute_address" "lb_ip" {
-  name         = "web-lb-ip"
-  region       = var.region
-  address_type = "EXTERNAL"
-}
-
 resource "google_compute_region_backend_service" "web_backend" {
   name                  = "web-backend-service"
   region                = var.region
@@ -134,7 +123,7 @@ resource "google_compute_region_backend_service" "web_backend" {
   health_checks         = [google_compute_region_health_check.web_health_check.id]
 
   backend {
-    group           = google_compute_region_instance_group_manager.web_mig.instance_group
+    group           = google_compute_region_instance_group_manager.web_igm.instance_group
     balancing_mode  = "UTILIZATION"
     capacity_scaler = 1.0
   }
@@ -146,6 +135,38 @@ resource "google_compute_region_security_policy" "web_policy" {
   region      = var.region
   description = "Restricts backend access to allowed IP ranges"
   type        = "CLOUD_ARMOR"
+}
+
+resource "google_compute_region_security_policy_rule" "default_rule" {
+  provider        = google-beta
+  region          = var.region
+  security_policy = google_compute_region_security_policy.web_policy.name
+  description     = "default rule"
+  priority        = 2147483647
+  action           = "deny(403)"
+
+  match {
+    versioned_expr = "SRC_IPS_V1"
+    config {
+      src_ip_ranges = ["*"]
+    }
+  }
+}
+
+resource "google_compute_region_security_policy_rule" "allow_configured_ranges" {
+  provider    = google-beta
+  region           = var.region
+  security_policy  = google_compute_region_security_policy.web_policy.name
+  description      = "allow configured IP ranges"
+  priority         = 1000
+  action           = "allow"
+
+  match {
+    versioned_expr = "SRC_IPS_V1"
+    config {
+      src_ip_ranges = var.allowed_http_ranges
+    }
+  }
 }
 
 resource "null_resource" "attach_security_policy" {
@@ -172,36 +193,11 @@ resource "null_resource" "attach_security_policy" {
   ]
 }
 
-resource "google_compute_region_security_policy_rule" "allow_configured_ranges" {
-  provider    = google-beta
-  region           = var.region
-  security_policy  = google_compute_region_security_policy.web_policy.name
-  description      = "allow configured IP ranges"
-  priority         = 1000
-  action           = "allow"
 
-  match {
-    versioned_expr = "SRC_IPS_V1"
-    config {
-      src_ip_ranges = var.allowed_http_ranges
-    }
-  }
-}
-
-resource "google_compute_region_security_policy_rule" "default_rule" {
-  provider        = google-beta
-  region          = var.region
-  security_policy = google_compute_region_security_policy.web_policy.name
-  priority        = 2147483647
-  description     = "default rule"
-  action           = "deny(403)"
-
-  match {
-    versioned_expr = "SRC_IPS_V1"
-    config {
-      src_ip_ranges = ["*"]
-    }
-  }
+resource "google_compute_address" "lb_ip" {
+  name         = "web-lb-ip"
+  region       = var.region
+  address_type = "EXTERNAL"
 }
 
 resource "google_compute_region_url_map" "web_url_map" {
@@ -226,4 +222,3 @@ resource "google_compute_forwarding_rule" "web_forwarding_rule" {
   load_balancing_scheme = "EXTERNAL_MANAGED"
   network               = var.network_self_link
 }
-

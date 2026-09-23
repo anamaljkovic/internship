@@ -47,6 +47,15 @@ resource "google_compute_firewall" "allow_health_checks" {
   target_tags   = ["web"]
 }
 
+resource "google_compute_subnetwork" "proxy_only_subnet" {
+  name          = "${var.network_name}-proxy-only"
+  ip_cidr_range = "10.20.0.0/24"
+  region        = var.region
+  network       = google_compute_network.vpc.id
+  purpose       = "REGIONAL_MANAGED_PROXY"
+  role          = "ACTIVE"
+}
+
 resource "google_compute_firewall" "allow_proxy_subnet" {
   name    = "${var.network_name}-allow-proxy-subnet"
   network = google_compute_network.vpc.id
@@ -74,12 +83,4 @@ resource "google_compute_router_nat" "nat" {
   source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
 }
 
-resource "google_compute_subnetwork" "proxy_only_subnet" {
-  name          = "${var.network_name}-proxy-only"
-  ip_cidr_range = "10.20.0.0/24"
-  region        = var.region
-  network       = google_compute_network.vpc.id
-  purpose       = "REGIONAL_MANAGED_PROXY"
-  role          = "ACTIVE"
-}
 

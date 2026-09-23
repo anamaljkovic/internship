@@ -17,3 +17,11 @@ variable "machine_type" {
 variable "startup_script" {
   type = string
 }
+
+variable "project_id" {
+  type = string
+}
+
+variable "image_name" {
+  type = string
+}

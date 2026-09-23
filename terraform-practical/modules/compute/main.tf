@@ -21,3 +21,36 @@ resource "google_compute_instance" "temp_vm" {
 
   allow_stopping_for_update = true
 }
+
+resource "null_resource" "wait_and_stop" {
+  triggers = {
+    instance_id = google_compute_instance.temp_vm.instance_id
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      echo "waiting for provisioning to complete on temp vm"
+      for i in $(seq 1 30); do
+        if gcloud compute instances get-serial-port-output ${google_compute_instance.temp_vm.name} \
+             --zone=${var.zone} --project=${var.project_id} 2>/dev/null | grep -q provisioning_complete; then
+          break
+        fi
+        sleep 10
+      done
+      echo "stopping temp vm before image capture"
+      gcloud compute instances stop ${google_compute_instance.temp_vm.name} \
+        --zone=${var.zone} --project=${var.project_id}
+    EOT
+  }
+
+  depends_on = [google_compute_instance.temp_vm]
+}
+
+resource "google_compute_image" "baked_image" {
+  name        = var.image_name
+  source_disk = google_compute_instance.temp_vm.boot_disk[0].source
+
+  depends_on = [null_resource.wait_and_stop]
+}
+

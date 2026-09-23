@@ -18,4 +18,6 @@ module "compute" {
   subnet_self_link  = module.network.subnet_self_link
   machine_type      = var.machine_type
   startup_script    = file("${path.module}/scripts/startup.sh")
+  project_id        = var.project_id
+  image_name        = var.image_name
 }

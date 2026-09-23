@@ -48,5 +48,11 @@ variable "app_port" {
 variable "machine_type" {
   description = "Machine for temp VM"
   type        = string
-  default     = "e2-small"
+  default     = "e2-medium"
+}
+
+variable "image_name" {
+  description = "Name of the custom image baked from the temp VM"
+  type        = string
+  default     = "web-image"
 }

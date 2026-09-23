@@ -47,6 +47,18 @@ resource "google_compute_firewall" "allow_health_checks" {
   target_tags   = ["web"]
 }
 
+resource "google_compute_firewall" "allow_proxy_subnet" {
+  name    = "${var.network_name}-allow-proxy-subnet"
+  network = google_compute_network.vpc.id
+
+  allow {
+    protocol = "tcp"
+    ports    = [tostring(var.app_port)]
+  }
+
+  source_ranges = [google_compute_subnetwork.proxy_only_subnet.ip_cidr_range]
+  target_tags   = ["web"]
+}
 
 resource "google_compute_router" "router" {
   name    = "${var.network_name}-router"

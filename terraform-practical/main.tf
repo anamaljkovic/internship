@@ -13,14 +13,15 @@ module "network" {
 module "compute" {
   source = "./modules/compute"
 
-  zone              = var.zone
-  network_self_link = module.network.network_self_link
-  subnet_self_link  = module.network.subnet_self_link
-  machine_type      = var.machine_type
-  startup_script    = file("${path.module}/scripts/startup.sh")
-  project_id        = var.project_id
-  image_name        = var.image_name
-  app_port          = var.app_port
-  region            = var.region
-  instance_count    = var.instance_count
+  zone                = var.zone
+  network_self_link   = module.network.network_self_link
+  subnet_self_link    = module.network.subnet_self_link
+  machine_type        = var.machine_type
+  startup_script      = file("${path.module}/scripts/startup.sh")
+  project_id          = var.project_id
+  image_name          = var.image_name
+  app_port            = var.app_port
+  region              = var.region
+  instance_count      = var.instance_count
+  allowed_http_ranges = var.allowed_http_ranges
 }

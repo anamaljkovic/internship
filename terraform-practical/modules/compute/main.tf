@@ -140,6 +140,70 @@ resource "google_compute_region_backend_service" "web_backend" {
   }
 }
 
+resource "google_compute_region_security_policy" "web_policy" {
+  provider    = google-beta
+  name        = "web-security-policy"
+  region      = var.region
+  description = "Restricts backend access to allowed IP ranges"
+  type        = "CLOUD_ARMOR"
+}
+
+resource "null_resource" "attach_security_policy" {
+  triggers = {
+    backend_service_id = google_compute_region_backend_service.web_backend.id
+    security_policy_id = google_compute_region_security_policy.web_policy.id
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      gcloud compute backend-services update ${google_compute_region_backend_service.web_backend.name} \
+        --region=${var.region} \
+        --security-policy=${google_compute_region_security_policy.web_policy.name} \
+        --project=${var.project_id}
+    EOT
+  }
+
+  depends_on = [
+    google_compute_region_backend_service.web_backend,
+    google_compute_region_security_policy.web_policy,
+    google_compute_region_security_policy_rule.allow_configured_ranges,
+    google_compute_region_security_policy_rule.default_rule
+  ]
+}
+
+resource "google_compute_region_security_policy_rule" "allow_configured_ranges" {
+  provider    = google-beta
+  region           = var.region
+  security_policy  = google_compute_region_security_policy.web_policy.name
+  description      = "allow configured IP ranges"
+  priority         = 1000
+  action           = "allow"
+
+  match {
+    versioned_expr = "SRC_IPS_V1"
+    config {
+      src_ip_ranges = var.allowed_http_ranges
+    }
+  }
+}
+
+resource "google_compute_region_security_policy_rule" "default_rule" {
+  provider        = google-beta
+  region          = var.region
+  security_policy = google_compute_region_security_policy.web_policy.name
+  priority        = 2147483647
+  description     = "default rule"
+  action           = "deny(403)"
+
+  match {
+    versioned_expr = "SRC_IPS_V1"
+    config {
+      src_ip_ranges = ["*"]
+    }
+  }
+}
+
 resource "google_compute_region_url_map" "web_url_map" {
   name            = "web-url-map"
   region          = var.region

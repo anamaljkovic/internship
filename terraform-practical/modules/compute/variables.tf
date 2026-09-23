@@ -37,3 +37,7 @@ variable "region" {
 variable "instance_count" {
   type = number
 }
+
+variable "allowed_http_ranges" {
+  type = list(string)
+}

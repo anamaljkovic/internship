@@ -76,13 +76,16 @@ resource "google_compute_instance_template" "web_template" {
     subnetwork = var.subnet_self_link
   }
 
+    metadata_startup_script = var.startup_script
+
   lifecycle {
     create_before_destroy = true
   }
 }
 
-resource "google_compute_health_check" "web_health_check" {
+resource "google_compute_region_health_check" "web_health_check" {
   name                = "web-health-check"
+    region              = var.region
   check_interval_sec  = 5
   timeout_sec         = 5
   healthy_threshold   = 2
@@ -92,5 +95,71 @@ resource "google_compute_health_check" "web_health_check" {
     port         = var.app_port
     request_path = "/"
   }
+}
+
+resource "google_compute_region_instance_group_manager" "web_mig" {
+  name               = "web-mig"
+  region             = var.region
+  base_instance_name = "web"
+  target_size        = var.instance_count
+
+  version {
+    instance_template = google_compute_instance_template.web_template.id
+  }
+
+  named_port {
+    name = "http"
+    port = var.app_port
+  }
+
+  auto_healing_policies {
+    health_check      = google_compute_region_health_check.web_health_check.id
+    initial_delay_sec = 60
+  }
+}
+
+resource "google_compute_address" "lb_ip" {
+  name         = "web-lb-ip"
+  region       = var.region
+  address_type = "EXTERNAL"
+}
+
+resource "google_compute_region_backend_service" "web_backend" {
+  name                  = "web-backend-service"
+  region                = var.region
+  protocol              = "HTTP"
+  port_name             = "http"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  timeout_sec           = 10
+  health_checks         = [google_compute_region_health_check.web_health_check.id]
+
+  backend {
+    group           = google_compute_region_instance_group_manager.web_mig.instance_group
+    balancing_mode  = "UTILIZATION"
+    capacity_scaler = 1.0
+  }
+}
+
+resource "google_compute_region_url_map" "web_url_map" {
+  name            = "web-url-map"
+  region          = var.region
+  default_service = google_compute_region_backend_service.web_backend.id
+}
+
+resource "google_compute_region_target_http_proxy" "web_http_proxy" {
+  name    = "web-http-proxy"
+  region  = var.region
+  url_map = google_compute_region_url_map.web_url_map.id
+}
+
+resource "google_compute_forwarding_rule" "web_forwarding_rule" {
+  name                  = "web-forwarding-rule"
+  region                = var.region
+  ip_address            = google_compute_address.lb_ip.address
+  ip_protocol           = "TCP"
+  port_range            = tostring(var.app_port)
+  target                = google_compute_region_target_http_proxy.web_http_proxy.id
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  network               = var.network_self_link
 }
 

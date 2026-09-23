@@ -29,3 +29,11 @@ variable "project_id" {
 variable "image_name" {
   type = string
 }
+
+variable "region" {
+  type = string
+}
+
+variable "instance_count" {
+  type = number
+}

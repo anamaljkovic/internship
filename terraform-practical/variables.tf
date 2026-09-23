@@ -56,3 +56,9 @@ variable "image_name" {
   type        = string
   default     = "web-image"
 }
+
+variable "instance_count" {
+  description = "Number of instances in the managed instance group"
+  type        = number
+  default     = 3
+}

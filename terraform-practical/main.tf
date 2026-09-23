@@ -21,4 +21,6 @@ module "compute" {
   project_id        = var.project_id
   image_name        = var.image_name
   app_port          = var.app_port
+  region            = var.region
+  instance_count    = var.instance_count
 }

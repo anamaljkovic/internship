@@ -61,3 +61,13 @@ resource "google_compute_router_nat" "nat" {
   nat_ip_allocate_option             = "AUTO_ONLY"
   source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
 }
+
+resource "google_compute_subnetwork" "proxy_only_subnet" {
+  name          = "${var.network_name}-proxy-only"
+  ip_cidr_range = "10.20.0.0/24"
+  region        = var.region
+  network       = google_compute_network.vpc.id
+  purpose       = "REGIONAL_MANAGED_PROXY"
+  role          = "ACTIVE"
+}
+

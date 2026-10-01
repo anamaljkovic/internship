@@ -1,0 +1,134 @@
+---
+- name: Deploy Spring PetClinic
+  hosts: app_servers
+  become: true
+
+  tasks:
+    - name: "[jar] Check if Docker is installed"
+      command: which docker
+      register: docker_check
+      failed_when: false
+      changed_when: false
+      when: artifact_type == "jar"
+
+    - name: "[jar] Stop docker container if running"
+      community.docker.docker_container:
+        name: petclinic
+        state: absent
+      when: artifact_type == "jar" and docker_check.rc == 0
+
+    - name: "[jar] Install Java"
+      apt:
+        name: openjdk-17-jdk
+        state: present
+        update_cache: true
+      when: artifact_type == "jar"
+
+    - name: "[jar] Create app directory"
+      file:
+        path: /opt/petclinic
+        state: directory
+        mode: '0755'
+      when: artifact_type == "jar"
+
+    - name: "[jar] Copy jar from local machine"
+      copy:
+        src: "{{ jar_local_path }}"
+        dest: "{{ jar_remote_path }}"
+        mode: '0755'
+      when: artifact_type == "jar"
+      notify: restart petclinic jar
+
+    - name: "[jar] Create systemd service"
+      template:
+        src: templates/petclinic-jar.service.j2
+        dest: /etc/systemd/system/petclinic.service
+      when: artifact_type == "jar"
+      notify: restart petclinic jar
+
+    - name: "[jar] Start and enable service"
+      systemd:
+        name: petclinic
+        state: started
+        enabled: true
+        daemon_reload: true
+      when: artifact_type == "jar"
+
+
+    - name: "[docker] Stop jar service if running"
+      systemd:
+        name: petclinic
+        state: stopped
+      when: artifact_type == "docker"
+      ignore_errors: true
+
+    - name: "[docker] Install prerequisites"
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+        state: present
+        update_cache: true
+      when: artifact_type == "docker"
+
+    - name: "[docker] Add Docker GPG key"
+      apt_key:
+        url: https://download.docker.com/linux/debian/gpg
+        state: present
+      when: artifact_type == "docker"
+
+    - name: "[docker] Add Docker repository"
+      apt_repository:
+        repo: "deb https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+        state: present
+      when: artifact_type == "docker"
+
+    - name: "[docker] Install Docker"
+      apt:
+        name: docker-ce
+        state: present
+        update_cache: true
+      when: artifact_type == "docker"
+
+    - name: "[docker] Ensure Docker is running"
+      systemd:
+        name: docker
+        state: started
+        enabled: true
+      when: artifact_type == "docker"
+
+    - name: "[docker] Pull image from Docker Hub"
+      community.docker.docker_image:
+        name: "{{ dockerhub_image }}:{{ artifact_version }}"
+        source: pull
+      when: artifact_type == "docker"
+
+    - name: "[docker] Run container"
+      community.docker.docker_container:
+        name: petclinic
+        image: "{{ dockerhub_image }}:{{ artifact_version }}"
+        state: started
+        restart_policy: always
+        ports:
+          - "{{ app_port }}:8080"
+      when: artifact_type == "docker"
+
+
+    - name: Wait for application to respond
+      uri:
+        url: "http://localhost:{{ app_port }}"
+        status_code: 200
+      register: health_check
+      until: health_check.status == 200
+      retries: 15
+      delay: 10
+
+  handlers:
+    - name: restart petclinic jar
+      systemd:
+        name: petclinic
+        state: restarted
+        daemon_reload: true
+

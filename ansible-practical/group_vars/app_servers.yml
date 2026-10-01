@@ -1,0 +1,9 @@
+app_port: 8080
+
+artifact_type: docker  
+
+jar_local_path: "./artifacts/spring-petclinic.jar"
+jar_remote_path: "/opt/petclinic/app.jar"
+
+dockerhub_image: "maljkovica/petclinic"
+artifact_version: "1:0"

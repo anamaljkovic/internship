@@ -1,0 +1,11 @@
+[Unit]
+Description=Spring PetClinic
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/java -jar {{ jar_remote_path }}
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target

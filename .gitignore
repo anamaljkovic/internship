@@ -29,7 +29,7 @@ collections/
 .DS_Store
 Thumbs.db
 
-artifacts/
+**/artifacts/
 *.jar
 
 *.pub

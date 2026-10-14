@@ -7,9 +7,9 @@ output "subnet_self_link" {
 }
 
 output "pods_range_name" {
-  value = "pods"
+  value = google_compute_subnetwork.subnet.secondary_ip_range[0].range_name
 }
 
 output "services_range_name" {
-  value = "services"
+  value = google_compute_subnetwork.subnet.secondary_ip_range[1].range_name
 }

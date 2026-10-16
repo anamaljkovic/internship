@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "petclinic.mysql.fullname" . }}
+  labels:
+    {{- include "petclinic.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate       
+  selector:
+    matchLabels:
+      {{- include "petclinic.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mysql
+  template:
+    metadata:
+      labels:
+        {{- include "petclinic.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mysql
+    spec:
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mysql
+          image: "{{ .Values.mysql.image.repository }}:{{ .Values.mysql.image.tag }}"
+          imagePullPolicy: {{ .Values.mysql.image.pullPolicy }}
+          ports:
+            - name: mysql
+              containerPort: 3306
+          envFrom:
+            - secretRef:
+                name: {{ include "petclinic.secretName" . }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+              subPath: mysql     
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -p\"$MYSQL_ROOT_PASSWORD\""]
+            {{- toYaml .Values.mysql.readinessProbe | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -p\"$MYSQL_ROOT_PASSWORD\""]
+            {{- toYaml .Values.mysql.livenessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.mysql.resources | nindent 12 }}
+      volumes:
+        - name: data
+          {{- if .Values.mysql.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "petclinic.mysql.fullname" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

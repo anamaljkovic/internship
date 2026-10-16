@@ -1,0 +1,22 @@
+{{- if .Values.mysql.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "petclinic.mysql.fullname" . }}
+  labels:
+    {{- include "petclinic.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+  {{- if .Values.mysql.persistence.keepOnUninstall }}
+  annotations:
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.mysql.persistence.accessMode }}
+  {{- with .Values.mysql.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.mysql.persistence.size }}
+{{- end }}

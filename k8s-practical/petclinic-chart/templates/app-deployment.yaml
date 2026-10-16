@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "petclinic.fullname" . }}
+  labels:
+    {{- include "petclinic.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "petclinic.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: app
+  template:
+    metadata:
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "petclinic.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: app
+    spec:
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.app.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.app.topologySpread.maxSkew }}
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: {{ .Values.app.topologySpread.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "petclinic.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: app
+      {{- end }}
+      initContainers:
+        - name: wait-for-mysql
+          image: "{{ .Values.app.waitForMysql.image.repository }}:{{ .Values.app.waitForMysql.image.tag }}"
+          imagePullPolicy: {{ .Values.app.waitForMysql.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - "until nc -z {{ include "petclinic.mysql.fullname" . }} {{ .Values.mysql.service.port }}; do echo waiting for mysql; sleep 3; done"
+      containers:
+        - name: petclinic
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.containerPort }}
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ .Values.app.springProfile | quote }}
+            - name: MYSQL_URL
+              value: {{ printf "jdbc:mysql://%s:%v/%s" (include "petclinic.mysql.fullname" .) .Values.mysql.service.port .Values.mysql.auth.database | quote }}
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "petclinic.secretName" . }}
+                  key: MYSQL_USER
+            - name: MYSQL_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "petclinic.secretName" . }}
+                  key: MYSQL_PASSWORD
+          readinessProbe:
+            {{- toYaml .Values.app.readinessProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.app.livenessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.app.resources | nindent 12 }}
